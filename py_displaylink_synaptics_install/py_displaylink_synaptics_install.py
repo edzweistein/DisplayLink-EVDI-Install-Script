@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import List
 from git import Repo
 from git import TagReference
+from git.exc import GitCommandError
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -37,10 +38,10 @@ if os.getuid() != 0:
     print("Please run this script with `sudo`. Exiting.")
     sys.exit(1)
 
-def dir_find(initSearchDir: str, targetObj: str) -> list[Path]:
+def dir_find(initSearchDir: Path, targetObj: str) -> list[Path]:
     return [d for d in Path(initSearchDir).rglob(targetObj) if d.is_dir()]
 
-def file_find(initSearchDir: str, targetObj: str) -> list[Path]:
+def file_find(initSearchDir: Path, targetObj: str) -> list[Path]:
     return [f for f in Path(initSearchDir).rglob(targetObj) if f.is_file()]
 
 locUser: str | None = os.getenv('USER') if os.getenv('USER') else None
@@ -50,7 +51,7 @@ runitTest: subprocess.CompletedProcess[str] = subprocess.run("ps -p 1 -o comm=",
     text=True
 )
 
-initTmpDir: str = "/tmp/"
+initTmpDir: Path = Path("/tmp/")
 evdiRepo: str = "https://github.com/DisplayLink/evdi.git"
 evdiGitPath: Path = Path("/tmp/evdi")
 evdiTarPath: str = os.path.dirname(evdiGitPath)
@@ -80,7 +81,6 @@ evdiTest: subprocess.CompletedProcess[str] = subprocess.run(f'lsmod | grep -Eio 
 )
 displayInstallerTest: Path = Path("/usr/bin/displaylink-installer")
 installDec: str
-print(f"lsmod: {evdiTest.stdout}")
 
 # Test for DisplayLink
 isDisplayLinkInstalled: bool = True if (evdiTest.stdout and displayInstallerTest.is_file()) else False
@@ -117,7 +117,7 @@ def evdi_git_tag_util() -> None:
     try:   
         Repo.clone_from(evdiRepo, evdiGitPath)
     except GitCommandError:
-        sys.exit(1)
+        clean_files()
 
     os.chdir(evdiGitPath)
     localEvdiRepo: git.repo.base.Repo = git.Repo(evdiGitPath)
@@ -170,7 +170,7 @@ def extract_displaylink_firmware() -> None:
     runFile: Path | None = runFileFind[0] if runFileFind else None
     if runFile is None:
         clean_files()
-    elif:
+    else:
         subprocess.run(["chmod", "+x", runFile], check=True)
         try:
             subprocess.run([runFile, "--noexec", "--keep"], check=True)
@@ -181,9 +181,10 @@ def extract_displaylink_firmware() -> None:
 
         extractDirFind: list[Path] = dir_find(displayLinkInstallDir, "displaylink-*")
         extractDir: Path | None = extractDirFind[0] if extractDirFind else None
-        os.chdir(extractDir)
+        os.chdir(str(extractDir))
         os.remove("evdi.tar.gz")
-        shutil.move(f"{evdiTarPath}/evdi.tar.gz", extractDir)
+        if extractDir is not None:
+            shutil.move(Path(f"{evdiTarPath}/evdi.tar.gz"), extractDir)
         subprocess.run(["chmod", "+x", f"{extractDir}/displaylink-installer.sh"], check=True)
         subprocess.run(["./displaylink-installer.sh", "noreboot"], check=True)
 
