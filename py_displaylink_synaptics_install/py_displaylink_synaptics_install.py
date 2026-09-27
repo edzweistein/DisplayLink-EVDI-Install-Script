@@ -110,15 +110,13 @@ def evdi_git_tag_util() -> None:
 
     if evdiGitPath.is_dir():
         with suppress(FileNotFoundError):
-            shutil.rmtree("/tmp/evdi")
+            shutil.rmtree(evdiGitPath)
         with suppress(FileNotFoundError):
-            os.remove("/tmp/evdi.tar.gz")
-        
-    Repo.clone_from(evdiRepo, "/tmp/evdi")
+            os.remove(f"{initTmpDir}evdi.tar.gz")
 
-    if evdiGitPath is None: 
-        sys.exit(1)
-    elif not evdiGitPath.is_dir():
+    try:   
+        Repo.clone_from(evdiRepo, evdiGitPath)
+    except GitCommandError:
         sys.exit(1)
 
     os.chdir(evdiGitPath)
@@ -127,7 +125,7 @@ def evdi_git_tag_util() -> None:
     localEvdiOrigin.pull()
     evdiGitMainFind: subprocess.CompletedProcess[str] = subprocess.run("git rev-parse --abbrev-ref origin/HEAD | cut -d/ -f2", 
         shell=True, 
-        capture_output=True, 
+        capture_output=True,
         text=True
     )
     evdiGitMain = evdiGitMainFind.stdout.strip()
@@ -169,9 +167,10 @@ def install_dir_rename() -> None:
 def extract_displaylink_firmware() -> None:
     os.chdir(displayLinkInstallDir)
     runFileFind: list[Path] = file_find(displayLinkInstallDir, "*.run")
-    print(runFileFind[0])
     runFile: Path | None = runFileFind[0] if runFileFind else None
-    if runFile:
+    if runFile is None:
+        clean_files()
+    elif:
         subprocess.run(["chmod", "+x", runFile], check=True)
         try:
             subprocess.run([runFile, "--noexec", "--keep"], check=True)
@@ -179,6 +178,7 @@ def extract_displaylink_firmware() -> None:
             if e.returncode == 1:
                 os.chdir("/opt")
                 clean_files()
+
         extractDirFind: list[Path] = dir_find(displayLinkInstallDir, "displaylink-*")
         extractDir: Path | None = extractDirFind[0] if extractDirFind else None
         os.chdir(extractDir)
