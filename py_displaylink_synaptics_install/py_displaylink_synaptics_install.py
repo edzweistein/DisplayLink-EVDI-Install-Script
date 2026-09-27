@@ -99,8 +99,8 @@ def clean_files() -> None:
             os.remove(displayLinkFullNameUp)
     if displayLinkInstallDir and displayLinkInstallDir.is_dir():
         with suppress(FileNotFoundError):
-            subprocess.run(["sudo", "rm", "-rf", displayLinkInstallDir], check=True)
-    sys.exit(1)
+            shutil.rmtree(displayLinkInstallDir)
+    sys.exit(0)
 
 def evdi_git_tag_util() -> None:
     global evdiGitPath
@@ -162,7 +162,7 @@ def unzip_displaylink() -> None:
 
 
 def install_dir_rename() -> None:
-    subprocess.run(["mv", displayLinkFileDir, displayLinkInstallDir], check=True)
+    shutil.move(displayLinkFileDir, displayLinkInstallDir)
 
 def extract_displaylink_firmware() -> None:
     os.chdir(displayLinkInstallDir)
