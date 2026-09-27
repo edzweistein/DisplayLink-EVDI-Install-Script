@@ -87,20 +87,24 @@ isDisplayLinkInstalled: bool = True if (evdiTest.stdout and displayInstallerTest
 
 print(f"isDisplayLinkInstalled: {isDisplayLinkInstalled}")
 
-def clean_files() -> None:
-    if Path(f"{evdiTarPath}/evdi.tar.gz").is_file():
+def clean_files(etp: str = evdiTarPath, 
+    egp: Path = evdiGitPath,
+    dfn: Path = displayLinkFullNameUp,
+    did: Path = displayLinkInstallDir, 
+    sysEx: int = 0) -> None:
+    if Path(f"{etp}/evdi.tar.gz").is_file():
         with suppress(FileNotFoundError):
-            os.remove(f"{evdiTarPath}/evdi.tar.gz")
-    if evdiGitPath:
+            os.remove(f"{etp}/evdi.tar.gz")
+    if egp:
         with suppress(FileNotFoundError):
-            shutil.rmtree(evdiGitPath)
-    if displayLinkFullNameUp:
+            shutil.rmtree(egp)
+    if dfn:
         with suppress(FileNotFoundError):
-            os.remove(displayLinkFullNameUp)
-    if displayLinkInstallDir and displayLinkInstallDir.is_dir():
+            os.remove(dfn)
+    if did and did.is_dir():
         with suppress(FileNotFoundError):
-            shutil.rmtree(displayLinkInstallDir)
-    sys.exit(0)
+            shutil.rmtree(did)
+    sys.exit(sysEx)
 
 def evdi_git_tag_util() -> None:
     global evdiGitPath
@@ -117,7 +121,7 @@ def evdi_git_tag_util() -> None:
     try:   
         Repo.clone_from(evdiRepo, evdiGitPath)
     except GitCommandError:
-        clean_files()
+        clean_files(1)
 
     os.chdir(evdiGitPath)
     localEvdiRepo: git.repo.base.Repo = git.Repo(evdiGitPath)
@@ -136,7 +140,7 @@ def evdi_git_tag_util() -> None:
     )
 
     if not evdiList:
-        clean_files()
+        clean_files(1)
 
     # Create Dynamic menu for Textualize
     # for tag in evdiList:
@@ -169,7 +173,7 @@ def extract_displaylink_firmware() -> None:
     runFileFind: list[Path] = file_find(displayLinkInstallDir, "*.run")
     runFile: Path | None = runFileFind[0] if runFileFind else None
     if runFile is None:
-        clean_files()
+        clean_files(1)
     else:
         subprocess.run(["chmod", "+x", runFile], check=True)
         try:
@@ -177,7 +181,7 @@ def extract_displaylink_firmware() -> None:
         except subprocess.CalledProcessError as e:
             if e.returncode == 1:
                 os.chdir("/opt")
-                clean_files()
+                clean_files(1)
 
         extractDirFind: list[Path] = dir_find(displayLinkInstallDir, "displaylink-*")
         extractDir: Path | None = extractDirFind[0] if extractDirFind else None
