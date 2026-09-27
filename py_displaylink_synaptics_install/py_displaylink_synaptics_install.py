@@ -185,10 +185,11 @@ def extract_displaylink_firmware() -> None:
 
         extractDirFind: list[Path] = dir_find(displayLinkInstallDir, "displaylink-*")
         extractDir: Path | None = extractDirFind[0] if extractDirFind else None
+        if extractDir is None:
+            clean_files(1)
         os.chdir(str(extractDir))
         os.remove("evdi.tar.gz")
-        if extractDir is not None:
-            shutil.move(Path(f"{evdiTarPath}/evdi.tar.gz"), extractDir)
+        shutil.move(Path(f"{evdiTarPath}/evdi.tar.gz"), extractDir)
         subprocess.run(["chmod", "+x", f"{extractDir}/displaylink-installer.sh"], check=True)
         subprocess.run(["./displaylink-installer.sh", "noreboot"], check=True)
 
