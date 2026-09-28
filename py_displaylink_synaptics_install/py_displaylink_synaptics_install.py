@@ -55,8 +55,6 @@ initTmpDir: Path = Path("/tmp/")
 evdiRepo: str = "https://github.com/DisplayLink/evdi.git"
 evdiGitPath: Path = Path("/tmp/evdi")
 evdiTarPath: str = os.path.dirname(evdiGitPath)
-evdiGitMain: str | None
-evdiGitTag: str | None
 
 # Current DisplayLink Download: https://www.synaptics.com/sites/default/files/exe_files/2026-06/DisplayLink%20USB%20Graphics%20Software%20for%20Ubuntu6.3-EXE.zip
 py_playwright_scraper.py_scraper()
@@ -87,44 +85,47 @@ isDisplayLinkInstalled: bool = True if (evdiTest.stdout and displayInstallerTest
 
 print(f"isDisplayLinkInstalled: {isDisplayLinkInstalled}")
 
-def clean_files(etp: str = evdiTarPath, 
-    egp: Path = evdiGitPath,
-    dfn: Path = displayLinkFullNameUp,
-    did: Path = displayLinkInstallDir, 
+def clean_files(evdiTp: str = evdiTarPath, 
+    evdiGp: Path = evdiGitPath,
+    dlfnUp: Path = displayLinkFullNameUp,
+    dliDir: Path = displayLinkInstallDir, 
     sysEx: int = 0) -> None:
-    if Path(f"{etp}/evdi.tar.gz").is_file():
+
+    if Path(f"{evdiTp}/evdi.tar.gz").is_file():
         with suppress(FileNotFoundError):
-            os.remove(f"{etp}/evdi.tar.gz")
-    if egp:
+            os.remove(f"{evdiTp}/evdi.tar.gz")
+    if evdiGp:
         with suppress(FileNotFoundError):
-            shutil.rmtree(egp)
-    if dfn:
+            shutil.rmtree(evdiGp)
+    if dlfnUp:
         with suppress(FileNotFoundError):
-            os.remove(dfn)
-    if did and did.is_dir():
+            os.remove(dlfnUp)
+    if dliDir and dliDir.is_dir():
         with suppress(FileNotFoundError):
-            shutil.rmtree(did)
+            shutil.rmtree(dliDir)
     sys.exit(sysEx)
 
-def evdi_git_tag_util() -> None:
-    global evdiGitPath
-    global evdiTarPath
-    global evdiGitMain
-    global evdiGitTag
+def evdi_git_tag_util(evdiGp: Path = evdiGitPath,
+    evdiTp: str = evdiTarPath,
+    evdiGr: str = evdiRepo,
+    initTd: Path = initTmpDir) -> None:
 
-    if evdiGitPath.is_dir():
+    evdiGitMain: str
+    evdiGitTag: str
+
+    if evdiGp.is_dir():
         with suppress(FileNotFoundError):
-            shutil.rmtree(evdiGitPath)
+            shutil.rmtree(evdiGp)
         with suppress(FileNotFoundError):
-            os.remove(f"{initTmpDir}evdi.tar.gz")
+            os.remove(f"{initTd}evdi.tar.gz")
 
     try:   
-        Repo.clone_from(evdiRepo, evdiGitPath)
+        Repo.clone_from(evdiGr, evdiGp)
     except GitCommandError:
-        clean_files(1)
+        clean_files(sysEx=1)
 
-    os.chdir(evdiGitPath)
-    localEvdiRepo: git.repo.base.Repo = git.Repo(evdiGitPath)
+    os.chdir(evdiGp)
+    localEvdiRepo: git.repo.base.Repo = git.Repo(evdiGp)
     localEvdiOrigin: git.remote.Remote = localEvdiRepo.remotes.origin
     localEvdiOrigin.pull()
     evdiGitMainFind: subprocess.CompletedProcess[str] = subprocess.run("git rev-parse --abbrev-ref origin/HEAD | cut -d/ -f2", 
@@ -132,7 +133,11 @@ def evdi_git_tag_util() -> None:
         capture_output=True,
         text=True
     )
-    evdiGitMain = evdiGitMainFind.stdout.strip()
+
+    if not evdiGitMainFind:
+        clean_files(sysEx=1)
+    else:
+        evdiGitMain = evdiGitMainFind.stdout.strip()
 
     evdiList: List[TagReference] = sorted(localEvdiRepo.tags, 
         key=lambda t: t.commit.committed_date, 
@@ -140,7 +145,7 @@ def evdi_git_tag_util() -> None:
     )
 
     if not evdiList:
-        clean_files(1)
+        clean_files(sysEx=1)
 
     # Create Dynamic menu for Textualize
     # for tag in evdiList:
@@ -153,27 +158,31 @@ def evdi_git_tag_util() -> None:
     localEvdiOrigin.fetch(tags=True)
     localEvdiRepo.git.checkout("-b", evdiGitTag)
 
-    with tarfile.open(f"{evdiTarPath}/evdi.tar.gz", "w:gz") as tarFile:
-        tarFile.add(evdiGitPath, arcname=".")
+    with tarfile.open(f"{evdiTp}/evdi.tar.gz", "w:gz") as tarFile:
+        tarFile.add(evdiGp, arcname=".")
 
     localEvdiRepo.git.checkout(evdiGitMain)
     localEvdiRepo.delete_head(evdiGitTag)
 
     
-def unzip_displaylink() -> None:
-    with zipfile.ZipFile(displayLinkFullNameUp, 'r') as zipRef:
-        zipRef.extractall(displayLinkFileDir)
+def unzip_displaylink(dlfnUp: Path = displayLinkFullNameUp,
+    dlfDir: Path = displayLinkFileDir) -> None:
+    with zipfile.ZipFile(dlfnUp, 'r') as zipRef:
+        zipRef.extractall(dlfDir)
 
 
-def install_dir_rename() -> None:
-    shutil.move(displayLinkFileDir, displayLinkInstallDir)
+def install_dir_rename(dlfDir: Path = displayLinkFileDir,
+    dliDir: Path = displayLinkInstallDir) -> None:
+    shutil.move(dlfDir, dliDir)
 
-def extract_displaylink_firmware() -> None:
-    os.chdir(displayLinkInstallDir)
-    runFileFind: list[Path] = file_find(displayLinkInstallDir, "*.run")
+def extract_displaylink_firmware(dliDir: Path = displayLinkInstallDir,
+    evdiTp: Path = evdiTarPath) -> None:
+
+    os.chdir(dliDir)
+    runFileFind: list[Path] = file_find(dliDir, "*.run")
     runFile: Path | None = runFileFind[0] if runFileFind else None
     if runFile is None:
-        clean_files(1)
+        clean_files(sysEx=1)
     else:
         subprocess.run(["chmod", "+x", runFile], check=True)
         try:
@@ -181,17 +190,18 @@ def extract_displaylink_firmware() -> None:
         except subprocess.CalledProcessError as e:
             if e.returncode == 1:
                 os.chdir("/opt")
-                clean_files(1)
+                clean_files(sysEx=1)
 
-        extractDirFind: list[Path] = dir_find(displayLinkInstallDir, "displaylink-*")
+        extractDirFind: list[Path] = dir_find(dliDir, "displaylink-*")
         extractDir: Path | None = extractDirFind[0] if extractDirFind else None
         if extractDir is None:
-            clean_files(1)
-        os.chdir(str(extractDir))
-        os.remove("evdi.tar.gz")
-        shutil.move(Path(f"{evdiTarPath}/evdi.tar.gz"), extractDir)
-        subprocess.run(["chmod", "+x", f"{extractDir}/displaylink-installer.sh"], check=True)
-        subprocess.run(["./displaylink-installer.sh", "noreboot"], check=True)
+            clean_files(sysEx=1)
+        else:
+            os.chdir(str(extractDir))
+            os.remove("evdi.tar.gz")
+            shutil.move(Path(f"{evdiTp}/evdi.tar.gz"), extractDir)
+            subprocess.run(["chmod", "+x", f"{extractDir}/displaylink-installer.sh"], check=True)
+            subprocess.run(["./displaylink-installer.sh", "noreboot"], check=True)
 
 
 # Menu to capture evdi decision, then do the remaining operations
