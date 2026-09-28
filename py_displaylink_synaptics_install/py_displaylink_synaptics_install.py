@@ -176,7 +176,7 @@ def install_dir_rename(dlfDir: Path = displayLinkFileDir,
     shutil.move(dlfDir, dliDir)
 
 def extract_displaylink_firmware(dliDir: Path = displayLinkInstallDir,
-    evdiTp: Path = evdiTarPath) -> None:
+    evdiTp: str = evdiTarPath) -> None:
 
     os.chdir(dliDir)
     runFileFind: list[Path] = file_find(dliDir, "*.run")
