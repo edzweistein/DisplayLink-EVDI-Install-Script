@@ -61,6 +61,7 @@ evdiGitPath: Path = Path("/tmp/evdi")
 evdiTarPath: str = os.path.dirname(evdiGitPath)
 
 installDec: bool | None = None
+testDec: bool | None = None
 
 def displaylink_install_check() -> bool:
     evdiTest: subprocess.CompletedProcess[str] = subprocess.run(f'lsmod | grep -Eio "evdi" | head -1', 
@@ -229,15 +230,18 @@ class InstallModal(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Container(id="installDialog"):
-            yield Label("::: Warning: DisplayLink Firmaware is already installed. Proceed?")
+            yield Label("::: Warning: DisplayLink Firmware is already installed. Proceed?")
+            yield Label("::: Navigate using `Tab`")
             with Grid(id="horizontalInstBtn"):
-                yield Button("Yes", id="instBtn", classes="installQbtn")
                 yield Button("No", id="noBtn", classes="installQbtn")
+                yield Button("Yes", id="instBtn", classes="installQbtn")
         
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "instBtn":
-            self.dismiss()
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
 
 
 class IntroContainer(Container):

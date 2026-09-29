@@ -41,13 +41,10 @@ InstallModal {
 .installQbtn {
     color: #2e3440;
     background: #8fbcbb;
+    text-style: none;
 }
 
-/*
-#closeBtn:focus {
-    margin: 1;
-    padding: 0;
-    color: #2e3440;
-    text-style: none; 
+.installQbtn:focus {
+    background: #d8dee9;
+    text-style: bold underline;
 }
-*/
