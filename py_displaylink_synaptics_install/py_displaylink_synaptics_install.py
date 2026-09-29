@@ -16,7 +16,11 @@ from git.exc import GitCommandError
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Container, Horizontal, VerticalScroll, Grid
+from textual.reactive import reactive
+from textual.screen import ModalScreen, Screen
 from textual.widgets import Header, Footer, RichLog, Welcome, Label, Button
+from textual.widgets import Placeholder
 
 # Personal Dev Notes: 
 # Change logic: do not look for /evdi in home, just clone it to /tmp/
@@ -56,184 +60,233 @@ evdiRepo: str = "https://github.com/DisplayLink/evdi.git"
 evdiGitPath: Path = Path("/tmp/evdi")
 evdiTarPath: str = os.path.dirname(evdiGitPath)
 
-# Current DisplayLink Download: https://www.synaptics.com/sites/default/files/exe_files/2026-06/DisplayLink%20USB%20Graphics%20Software%20for%20Ubuntu6.3-EXE.zip
-py_playwright_scraper.py_scraper()
-displayLinkFullNameFind: list[Path] = file_find(initTmpDir, "DisplayLink*.zip")
-displayLinkFullName: Path | None = displayLinkFullNameFind[0] if displayLinkFullNameFind else None
-if not displayLinkFullName:
-    sys.exit(1)
-else:
-    displayLinkPath: Path = displayLinkFullName.parent
-    displayLinkName: str = displayLinkFullName.name
-    displayLinkNameFix: Path = displayLinkFullName.parent / displayLinkFullName.name.replace(" ", "_")
-    displayLinkFullNameUp: Path = displayLinkFullName.rename(displayLinkNameFix)
-    displayLinkVer: List[str] = re.findall(r"\d+\.\d+", displayLinkFullNameUp.name)
-    displayLinkTarget: str = f"displaylink_{displayLinkVer[0]}"
-    displayLinkFileDir: Path = displayLinkFullName.parent / displayLinkTarget
-    displayLinkInstallDir: Path = Path(f"/opt/{displayLinkTarget}")
+installDec: bool | None = None
 
-evdiTest: subprocess.CompletedProcess[str] = subprocess.run(f'lsmod | grep -Eio "evdi" | head -1', 
-    shell=True, 
-    capture_output=True, 
-    text=True
-)
-displayInstallerTest: Path = Path("/usr/bin/displaylink-installer")
-installDec: str
-
-# Test for DisplayLink
-isDisplayLinkInstalled: bool = True if (evdiTest.stdout and displayInstallerTest.is_file()) else False
-
-print(f"isDisplayLinkInstalled: {isDisplayLinkInstalled}")
-
-def clean_files(evdiTp: str = evdiTarPath, 
-    evdiGp: Path = evdiGitPath,
-    dlfnUp: Path = displayLinkFullNameUp,
-    dliDir: Path = displayLinkInstallDir, 
-    sysEx: int = 0) -> None:
-
-    if Path(f"{evdiTp}/evdi.tar.gz").is_file():
-        with suppress(FileNotFoundError):
-            os.remove(f"{evdiTp}/evdi.tar.gz")
-    if evdiGp:
-        with suppress(FileNotFoundError):
-            shutil.rmtree(evdiGp)
-    if dlfnUp:
-        with suppress(FileNotFoundError):
-            os.remove(dlfnUp)
-    if dliDir and dliDir.is_dir():
-        with suppress(FileNotFoundError):
-            shutil.rmtree(dliDir)
-    sys.exit(sysEx)
-
-def evdi_git_tag_util(evdiGp: Path = evdiGitPath,
-    evdiTp: str = evdiTarPath,
-    evdiGr: str = evdiRepo,
-    initTd: Path = initTmpDir) -> None:
-
-    evdiGitMain: str
-    evdiGitTag: str
-
-    if evdiGp.is_dir():
-        with suppress(FileNotFoundError):
-            shutil.rmtree(evdiGp)
-        with suppress(FileNotFoundError):
-            os.remove(f"{initTd}evdi.tar.gz")
-
-    try:   
-        Repo.clone_from(evdiGr, evdiGp)
-    except GitCommandError:
-        clean_files(sysEx=1)
-
-    os.chdir(evdiGp)
-    localEvdiRepo: git.repo.base.Repo = git.Repo(evdiGp)
-    localEvdiOrigin: git.remote.Remote = localEvdiRepo.remotes.origin
-    localEvdiOrigin.pull()
-    evdiGitMainFind: subprocess.CompletedProcess[str] = subprocess.run("git rev-parse --abbrev-ref origin/HEAD | cut -d/ -f2", 
+def displaylink_install_check() -> bool:
+    evdiTest: subprocess.CompletedProcess[str] = subprocess.run(f'lsmod | grep -Eio "evdi" | head -1', 
         shell=True, 
-        capture_output=True,
+        capture_output=True, 
         text=True
     )
+    displayInstallerTest: Path = Path("/usr/bin/displaylink-installer")
+    isDisplayLinkInstalled: bool = True if (evdiTest.stdout and displayInstallerTest.is_file()) else False
+    print(f"isDisplayLinkInstalled: {isDisplayLinkInstalled}")
+    return isDisplayLinkInstalled
 
-    if not evdiGitMainFind:
-        clean_files(sysEx=1)
+
+# Current DisplayLink Download: https://www.synaptics.com/sites/default/files/exe_files/2026-06/DisplayLink%20USB%20Graphics%20Software%20for%20Ubuntu6.3-EXE.zip
+if not installDec:
+    py_playwright_scraper.py_scraper()
+    displayLinkFullNameFind: list[Path] = file_find(initTmpDir, "DisplayLink*.zip")
+    displayLinkFullName: Path | None = displayLinkFullNameFind[0] if displayLinkFullNameFind else None
+    if not displayLinkFullName:
+        print("Could not download Synaptics DisplayLink driver.")
+        # sys.exit(1)
     else:
-        evdiGitMain = evdiGitMainFind.stdout.strip()
-
-    evdiList: List[TagReference] = sorted(localEvdiRepo.tags, 
-        key=lambda t: t.commit.committed_date, 
-        reverse=True
-    )
-
-    if not evdiList:
-        clean_files(sysEx=1)
-
-    # Create Dynamic menu for Textualize
-    # for tag in evdiList:
-    #     print(tag.name, tag.commit.committed_datetime)
-
-    # latest tag - placeholder
-    print(f"evdiList: {evdiList[0]}")
-    evdiGitTag = evdiList[0]
-
-    localEvdiOrigin.fetch(tags=True)
-    localEvdiRepo.git.checkout("-b", evdiGitTag)
-
-    with tarfile.open(f"{evdiTp}/evdi.tar.gz", "w:gz") as tarFile:
-        tarFile.add(evdiGp, arcname=".")
-
-    localEvdiRepo.git.checkout(evdiGitMain)
-    localEvdiRepo.delete_head(evdiGitTag)
-
-    
-def unzip_displaylink(dlfnUp: Path = displayLinkFullNameUp,
-    dlfDir: Path = displayLinkFileDir) -> None:
-    with zipfile.ZipFile(dlfnUp, 'r') as zipRef:
-        zipRef.extractall(dlfDir)
+        displayLinkPath: Path = displayLinkFullName.parent
+        displayLinkName: str = displayLinkFullName.name
+        displayLinkNameFix: Path = displayLinkFullName.parent / displayLinkFullName.name.replace(" ", "_")
+        displayLinkFullNameUp: Path = displayLinkFullName.rename(displayLinkNameFix)
+        displayLinkVer: List[str] = re.findall(r"\d+\.\d+", displayLinkFullNameUp.name)
+        displayLinkTarget: str = f"displaylink_{displayLinkVer[0]}"
+        displayLinkFileDir: Path = displayLinkFullName.parent / displayLinkTarget
+        displayLinkInstallDir: Path = Path(f"/opt/{displayLinkTarget}")
 
 
-def install_dir_rename(dlfDir: Path = displayLinkFileDir,
-    dliDir: Path = displayLinkInstallDir) -> None:
-    shutil.move(dlfDir, dliDir)
 
-def extract_displaylink_firmware(dliDir: Path = displayLinkInstallDir,
-    evdiTp: str = evdiTarPath) -> None:
+    def clean_files(evdiTp: str = evdiTarPath, 
+        evdiGp: Path = evdiGitPath,
+        dlfnUp: Path = displayLinkFullNameUp,
+        dliDir: Path = displayLinkInstallDir, 
+        sysEx: int = 0) -> None:
 
-    os.chdir(dliDir)
-    runFileFind: list[Path] = file_find(dliDir, "*.run")
-    runFile: Path | None = runFileFind[0] if runFileFind else None
-    if runFile is None:
-        clean_files(sysEx=1)
-    else:
-        subprocess.run(["chmod", "+x", runFile], check=True)
-        try:
-            subprocess.run([runFile, "--noexec", "--keep"], check=True)
-        except subprocess.CalledProcessError as e:
-            if e.returncode == 1:
-                os.chdir("/opt")
-                clean_files(sysEx=1)
+        if Path(f"{evdiTp}/evdi.tar.gz").is_file():
+            with suppress(FileNotFoundError):
+                os.remove(f"{evdiTp}/evdi.tar.gz")
+        if evdiGp:
+            with suppress(FileNotFoundError):
+                shutil.rmtree(evdiGp)
+        if dlfnUp:
+            with suppress(FileNotFoundError):
+                os.remove(dlfnUp)
+        if dliDir and dliDir.is_dir():
+            with suppress(FileNotFoundError):
+                shutil.rmtree(dliDir)
+        sys.exit(sysEx)
 
-        extractDirFind: list[Path] = dir_find(dliDir, "displaylink-*")
-        extractDir: Path | None = extractDirFind[0] if extractDirFind else None
-        if extractDir is None:
+    def evdi_git_tag_util(evdiGp: Path = evdiGitPath,
+        evdiTp: str = evdiTarPath,
+        evdiGr: str = evdiRepo,
+        initTd: Path = initTmpDir) -> None:
+
+        evdiGitMain: str
+        evdiGitTag: str
+
+        if evdiGp.is_dir():
+            with suppress(FileNotFoundError):
+                shutil.rmtree(evdiGp)
+            with suppress(FileNotFoundError):
+                os.remove(f"{initTd}evdi.tar.gz")
+
+        try:   
+            Repo.clone_from(evdiGr, evdiGp)
+        except GitCommandError:
+            clean_files(sysEx=1)
+
+        os.chdir(evdiGp)
+        localEvdiRepo: git.repo.base.Repo = git.Repo(evdiGp)
+        localEvdiOrigin: git.remote.Remote = localEvdiRepo.remotes.origin
+        localEvdiOrigin.pull()
+        evdiGitMainFind: subprocess.CompletedProcess[str] = subprocess.run("git rev-parse --abbrev-ref origin/HEAD | cut -d/ -f2", 
+            shell=True, 
+            capture_output=True,
+            text=True
+        )
+
+        if not evdiGitMainFind:
             clean_files(sysEx=1)
         else:
-            os.chdir(str(extractDir))
-            os.remove("evdi.tar.gz")
-            shutil.move(Path(f"{evdiTp}/evdi.tar.gz"), extractDir)
-            subprocess.run(["chmod", "+x", f"{extractDir}/displaylink-installer.sh"], check=True)
-            subprocess.run(["./displaylink-installer.sh", "noreboot"], check=True)
+            evdiGitMain = evdiGitMainFind.stdout.strip()
+
+        evdiList: List[TagReference] = sorted(localEvdiRepo.tags, 
+            key=lambda t: t.commit.committed_date, 
+            reverse=True
+        )
+
+        if not evdiList:
+            clean_files(sysEx=1)
+
+        # Create Dynamic menu for Textualize
+        # for tag in evdiList:
+        #     print(tag.name, tag.commit.committed_datetime)
+
+        # latest tag - placeholder
+        print(f"evdiList: {evdiList[0]}")
+        evdiGitTag = evdiList[0]
+
+        localEvdiOrigin.fetch(tags=True)
+        localEvdiRepo.git.checkout("-b", evdiGitTag)
+
+        with tarfile.open(f"{evdiTp}/evdi.tar.gz", "w:gz") as tarFile:
+            tarFile.add(evdiGp, arcname=".")
+
+        localEvdiRepo.git.checkout(evdiGitMain)
+        localEvdiRepo.delete_head(evdiGitTag)
+
+        
+    def unzip_displaylink(dlfnUp: Path = displayLinkFullNameUp,
+        dlfDir: Path = displayLinkFileDir) -> None:
+        with zipfile.ZipFile(dlfnUp, 'r') as zipRef:
+            zipRef.extractall(dlfDir)
 
 
-# Menu to capture evdi decision, then do the remaining operations
-evdi_git_tag_util()
-unzip_displaylink()
-install_dir_rename()
-extract_displaylink_firmware()
-clean_files()
+    def install_dir_rename(dlfDir: Path = displayLinkFileDir,
+        dliDir: Path = displayLinkInstallDir) -> None:
+        shutil.move(dlfDir, dliDir)
+
+    def extract_displaylink_firmware(dliDir: Path = displayLinkInstallDir,
+        evdiTp: str = evdiTarPath) -> None:
+
+        os.chdir(dliDir)
+        runFileFind: list[Path] = file_find(dliDir, "*.run")
+        runFile: Path | None = runFileFind[0] if runFileFind else None
+        if runFile is None:
+            clean_files(sysEx=1)
+        else:
+            subprocess.run(["chmod", "+x", runFile], check=True)
+            try:
+                subprocess.run([runFile, "--noexec", "--keep"], check=True)
+            except subprocess.CalledProcessError as e:
+                if e.returncode == 1:
+                    os.chdir("/opt")
+                    clean_files(sysEx=1)
+
+            extractDirFind: list[Path] = dir_find(dliDir, "displaylink-*")
+            extractDir: Path | None = extractDirFind[0] if extractDirFind else None
+            if extractDir is None:
+                clean_files(sysEx=1)
+            else:
+                os.chdir(str(extractDir))
+                os.remove("evdi.tar.gz")
+                shutil.move(Path(f"{evdiTp}/evdi.tar.gz"), extractDir)
+                subprocess.run(["chmod", "+x", f"{extractDir}/displaylink-installer.sh"], check=True)
+                subprocess.run(["./displaylink-installer.sh", "noreboot"], check=True)
 
 
-# class DisplayLinkInstall(App):
-#     BINDINGS = [
-#         Binding(key="q", action="quit", description="Quit the DisplayLink Installer")
-#     ]
-#     def on_mount(self) -> None:
-#         self.theme = "nord"
-#     def compose(self) -> ComposeResult:
-#         yield Header()
-#         yield Label(":::::::::::::::::::::::::::::::::::::::::::")
-#         yield Label("::: DisplayLink Installer")
-#         yield Label(":::::::::::::::::::::::::::::::::::::::::::")
-#         yield Button("Start", id="start", variant="primary") 
-#         # yield Button("No", id="no", variant="error")
-#         yield Footer()
+    # Menu to capture evdi decision, then do the remaining operations
 
-#     def on_button_pressed(self, event: Button.Pressed) -> None:
-#         self.exit(event.button.id)
+    # evdi_git_tag_util()
+    # unzip_displaylink()
+    # install_dir_rename()
+    # extract_displaylink_firmware()
+    # clean_files()
 
-#     evdi_git_tag_util()
+# class InstallButtons(Container):
+#     CSS_PATH = "styles.tcss"
 
-# if __name__ == "__main__":
-#     app = DisplayLinkInstall()
-#     reply = app.run()
-#     print(reply)
-#     # app.run()
+class InstallModal(ModalScreen):
+    CSS_PATH = "styles.tcss"
+
+    def compose(self) -> ComposeResult:
+        with Container(id="installDialog"):
+            yield Label("::: Warning: DisplayLink Firmaware is already installed. Proceed?")
+            with Grid(id="horizontalInstBtn"):
+                yield Button("Yes", id="instBtn", classes="installQbtn")
+                yield Button("No", id="noBtn", classes="installQbtn")
+        
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "instBtn":
+            self.dismiss()
+
+
+class IntroContainer(Container):
+    CSS_PATH = "styles.tcss"
+
+    # Container for DisplayLink/Evdi Events
+    # def compose(self) -> ComposeResult:
+    #     yield Label(f"::: {self.displayLinkInstallCheck}")
+
+
+class AppScreen(Screen):
+    CSS_PATH = "styles.tcss"
+
+    def compose(self) -> ComposeResult:
+        yield Header(id="Header")
+        yield IntroContainer(id="IntroContainer")
+        yield Footer(id="Footer")
+
+
+class DisplayLinkInstaller(App):
+    BINDINGS = [
+        Binding(key="q", action="quit", description="Quit the DisplayLink Installer")
+    ]
+
+    CSS_PATH = "styles.tcss"
+
+    def on_mount(self) -> None:
+        self.theme = "nord"
+
+    displayLinkInstallCheck: bool = displaylink_install_check()
+
+    def on_ready(self) -> None:
+        self.push_screen(AppScreen())
+        if self.displayLinkInstallCheck:
+            self.push_screen(InstallModal())
+
+    # def compose(self) -> ComposeResult:
+        # yield Header()
+        # yield Label(f"::: {self.displayLinkInstallCheck}")
+        # yield Button("Start", id="start", variant="primary") 
+        # yield Button("No", id="no", variant="error")
+        # yield Footer()
+
+    # def on_button_pressed(self, event: Button.Pressed) -> None:
+    #     self.exit(event.button.id)
+
+
+if __name__ == "__main__":
+    app = DisplayLinkInstaller()
+    reply = app.run()
+    print(f"reply: {reply}")
+    # app.run()

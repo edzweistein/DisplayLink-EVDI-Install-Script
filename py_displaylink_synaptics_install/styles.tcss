@@ -1,0 +1,53 @@
+Header {
+    height: 3;
+    align: center middle;
+    dock: top;
+}
+IntroContainer {
+    width: 1fr;
+    height: 1fr;
+    border: solid white;
+}
+Footer {
+    height: 3;
+    align: left middle;
+    dock: bottom;
+}
+
+/*
+InstallModal
+*/
+InstallModal {
+    align: center middle;
+}
+#installDialog {
+    align: center middle;
+    width: 80;
+    height: 30;
+    background: $surface;
+    border: tall $primary;
+    padding: 1 2;
+}
+
+#horizontalInstBtn {
+    layout: grid;
+    grid-size: 2;
+    height: auto;
+    margin-top: 2;
+    align: center middle;
+    border: solid #d8dee9;
+}
+
+.installQbtn {
+    color: #2e3440;
+    background: #8fbcbb;
+}
+
+/*
+#closeBtn:focus {
+    margin: 1;
+    padding: 0;
+    color: #2e3440;
+    text-style: none; 
+}
+*/
